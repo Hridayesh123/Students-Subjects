@@ -11,6 +11,7 @@ import {
 } from "../models/models";
 import { seq } from "../models/models";
 import { error } from "console";
+import { calculateGPA } from "./GPAlogic";
 
 var key = "";
 
@@ -218,6 +219,50 @@ async function addStudentMarks(req: Request, res: Response): Promise<void> {
   // }
 }
 
+async function generateResult(req:Request , res:Response) : Promise<void> {
+  const id =  parseInt(req.params.id) ;
+
+  try {
+    const studentDetails: Awaited<Promise<any>> = await seq.query(
+      `SELECT id, name, address, subject_id, subject_code, marks
+      FROM stud_by_id(:id_holder)`,
+      {
+        replacements: { id_holder: id },
+      }
+    );
+      console.log(studentDetails);
+    const subjects = {};
+      console.log(studentDetails[1]);
+    const name = studentDetails[1].rows[0].name;
+    
+    for (const row of studentDetails[1].rows) {
+      subjects[row.subject_code] = row.marks;
+    }
+
+    const marksArray = [];
+    for (const [subjectCode, marks] of Object.entries(subjects)) {
+      const markObj = {};
+      markObj[subjectCode] = marks;
+      marksArray.push(markObj);
+    }
+
+    const totalMarks = Object.values(subjects).reduce((total : number, marks: number) => total + marks, 0/*'accumulator initial value*/);
+    const number_of_subjects = Object.values(subjects).length;
+    const gpa = calculateGPA(totalMarks,number_of_subjects); 
+
+    const responseBody = {
+      Id: studentDetails[0].id,
+      Name: name,
+      GPA: gpa,
+      Marks: marksArray,
+    };
+
+    res.status(200).json(responseBody);
+  } catch (err) {
+    res.status(404).json(err);
+  }
+}
+
 async function getSubject(req: Request, res: Response): Promise<void> {
   try {
     const page = parseInt(req.query.page as string) || 1;
@@ -313,7 +358,8 @@ export {
   login,
   verifyToken,
   getStudentsById,
-  addStudentMarks
+  addStudentMarks,
+  generateResult
 };
 export { AuthenticatedRequest };
 
